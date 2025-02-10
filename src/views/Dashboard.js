@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React from "react";
 
 // reactstrap components
-import { Card, CardHeader, CardBody, CardTitle, Row, Col, Button, Input } from "reactstrap";
+import { Card, CardHeader, CardBody, CardTitle, Row, Col } from "reactstrap";
 
 import { Bar } from "react-chartjs-2";
 import { ChartOptions, LineChartConfig } from "variables/ChartConfig";

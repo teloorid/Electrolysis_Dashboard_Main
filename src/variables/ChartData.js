@@ -1,7 +1,8 @@
-import {DeviceSensorsConfig} from "variables/DeviceSensorsConfig";
-import {generateRandomData, generateTimestampsLabels,} from "utils/ChartSimulation";
+import { DeviceSensorsConfig } from "variables/DeviceSensorsConfig";
+import { generateRandomData, generateTimestampsLabels } from "utils/ChartSimulation";
 
 const MINUTES_IN_YEAR = 365 * 24 * 60;
+const MAX_VALUE = 500; // Reduced from 1000 to match your range of 200-500
 
 const ChartData = Object.keys(DeviceSensorsConfig).reduce((data, key) => {
   let oxygenValues = [];
@@ -15,10 +16,34 @@ const ChartData = Object.keys(DeviceSensorsConfig).reduce((data, key) => {
       count
     );
 
+    // Cap Oxygen values and ensure they're numbers
+    generatedData = generatedData.map(val => {
+      // Convert string to number if necessary
+      const numVal = typeof val === 'string' ? parseFloat(val) : val;
+      // Handle NaN or invalid values
+      if (isNaN(numVal)) return 0;
+      return Math.min(numVal, MAX_VALUE);
+    });
+
     if (config.title === 'Oxygen Volume') {
       oxygenValues = generatedData;
     } else if (config.title === 'Hydrogen Volume' && oxygenValues.length) {
-      generatedData = oxygenValues.map((val) => (val * 1.5).toFixed(config.decimal));
+      generatedData = oxygenValues.map((oxygenVal, index) => {
+        // Ensure oxygen value is a number
+        const oxygenNum = typeof oxygenVal === 'string' ? parseFloat(oxygenVal) : oxygenVal;
+
+        // Handle invalid oxygen values
+        if (isNaN(oxygenNum)) return 0;
+
+        // Calculate hydrogen value with safety checks
+        let hydrogenValue = oxygenNum * 1.5;
+
+        // Cap the hydrogen value
+        hydrogenValue = Math.min(hydrogenValue, MAX_VALUE);
+
+        // Return the value as a number, not a string
+        return hydrogenValue;
+      });
     }
 
     const timestamps = generateTimestampsLabels("minutes", 1, count);

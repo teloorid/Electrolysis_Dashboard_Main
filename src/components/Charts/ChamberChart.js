@@ -66,19 +66,25 @@ function ChamberChart(props) {
       const key = getTimeBucketKey(date, precision);
       if (!key) return;
 
-      if (!aggregatedMap.has(key)) {
-        aggregatedMap.set(key, {
-          sum: data[index],
-          count: 1,
-          date: date // Store the date for sorting
-        });
-      } else {
-        const current = aggregatedMap.get(key);
-        aggregatedMap.set(key, {
-          sum: current.sum + data[index],
-          count: current.count + 1,
-          date: current.date
-        });
+      const value = data[index];
+      // Only aggregate non-null, valid numbers
+      if (value !== null && value !== undefined && !isNaN(value)) {
+        if (!aggregatedMap.has(key)) {
+          aggregatedMap.set(key, {
+            sum: value,
+            count: 1,
+            date: date,
+            lastValue: value // Keep track of the last valid value
+          });
+        } else {
+          const current = aggregatedMap.get(key);
+          aggregatedMap.set(key, {
+            sum: current.sum + value,
+            count: current.count + 1,
+            date: current.date,
+            lastValue: value // Update the last valid value
+          });
+        }
       }
     });
 
@@ -87,23 +93,25 @@ function ChamberChart(props) {
       .map(([key, value]) => ({
         label: key,
         value: value.sum / value.count,
+        lastValue: value.lastValue,
         date: value.date
       }))
       .sort((a, b) => a.date - b.date);
 
     return {
       aggregatedData: aggregated.map(item => item.value),
-      aggregatedLabels: aggregated.map(item => item.label)
+      aggregatedLabels: aggregated.map(item => item.label),
+      lastValidValue: aggregated.length > 0 ? aggregated[aggregated.length - 1].lastValue : null
     };
   };
 
   // Process individual metrics with aggregation and filtering
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const processMetric = (metricData, labels, precision, dateRange) => {
+const processMetric = (metricData, labels, precision, dateRange) => {
     if (!metricData || !labels) return { data: metricData, labels };
 
     // First aggregate the data
-    const { aggregatedData, aggregatedLabels } = aggregateData(
+    const { aggregatedData, aggregatedLabels, lastValidValue } = aggregateData(
       metricData,
       labels,
       precision || 'hour'
@@ -114,9 +122,13 @@ function ChamberChart(props) {
       const fromDate = parseDate(dateRange.from);
       const toDate = parseDate(dateRange.to);
 
-      if (!fromDate || !toDate) return { data: aggregatedData, labels: aggregatedLabels };
+      if (!fromDate || !toDate) return {
+        data: aggregatedData,
+        labels: aggregatedLabels,
+        lastValidValue
+      };
 
-      return aggregatedLabels.reduce((acc, label, index) => {
+      const filtered = aggregatedLabels.reduce((acc, label, index) => {
         const date = parseDate(label);
         if (date && date >= fromDate && date <= toDate) {
           acc.labels.push(label);
@@ -124,9 +136,18 @@ function ChamberChart(props) {
         }
         return acc;
       }, {labels: [], data: []});
+
+      return {
+        ...filtered,
+        lastValidValue // Preserve the last valid value even after filtering
+      };
     }
 
-    return { data: aggregatedData, labels: aggregatedLabels };
+    return {
+      data: aggregatedData,
+      labels: aggregatedLabels,
+      lastValidValue
+    };
   };
 
   // Process metrics for charts
@@ -159,11 +180,19 @@ function ChamberChart(props) {
     return processed;
   }, [config, processMetric]);
 
-  // Get the latest value safely
-  const getLatestValue = (metricIndex) => {
+    const getLatestValue = (metricIndex) => {
     const metric = processedMetrics[metricIndex];
     if (!metric?.data || metric.data.length === 0) return "N/A";
-    return metric.data[metric.data.length - 1];
+
+    // Search backwards through the data array to find the last non-null value
+    for (let i = metric.data.length - 1; i >= 0; i--) {
+      const value = metric.data[i];
+      if (value !== null && value !== undefined && !isNaN(value)) {
+        // Format the number to 1 decimal place if it's not a whole number
+        return Number.isInteger(value) ? value : Number(value).toFixed(1);
+      }
+    }
+    return "N/A";
   };
 
   return (
